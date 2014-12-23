@@ -1,0 +1,4 @@
+JBOSS_HOME=/opt/jboss/as/6.0/jboss-6.0.0.Final
+JBOSS_JMX_HOST=127.0.0.1
+JBOSS_JMX_PORT=1090
+JBOSS_JMX_USER=monitoring

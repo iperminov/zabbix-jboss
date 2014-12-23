@@ -1,0 +1,128 @@
+JBoss AS monitoring module for Zabbix
+
+Author: Igor A. Perminov <igor.a.perminov@gmail.com>
+License: GPL v2+
+
+Supported JBoss AS version: 6.0.0.Final
+
+
+Features
+
+1. Monitoring JBoss AS state via JMX.
+
+2. Low-level discovery and monitoring of following elements:
+    * Data sources: managed connection pools (jboss.jca:service=ManagedConnectionPool);
+    * Web applications: web managers (jboss.web:type=Manager);
+    * HTTP/AJP connectors: global request processors (jboss.web:type=GlobalRequestProcessor)
+      and thread pools (jboss.web:type=ThreadPool);
+    * Bounded queue thread pools (jboss.threads:type=boundedQueueThreadPool);
+    * Queueless thread pool (jboss.threads:type=queuelessThreadPool).
+
+3. Monitoring JBoss AS version and build number.
+
+
+Installation steps (tested for Ubuntu 14.04)
+
+0. Prerequisites: it is assumed that Zabbix server, Zabbix agent and Zabbix Java gateway
+are installed and running.
+
+1. Download and unpack the distribution archive zabbix-jboss-<version>.tar.gz
+(replace <version> with the actual version of the module):
+
+    sudo tar xvzf zabbix-jboss-<version>.tar.gz -C /usr/local/share
+
+2. Add user parameters into your Zabbix agent. It can be done in one of the following ways:
+
+a) Copy /usr/local/share/zabbix-jboss/etc/zabbix/zabbix_agentd.d/userparameter_jboss.conf
+into your zabbix_agent.d directory (usually /etc/zabbix/zabbix_agentd.d).
+
+    sudo cp /usr/local/share/zabbix-jboss/etc/zabbix/zabbix_agentd.d/userparameter_jboss.conf /etc/zabbix/zabbix_agentd.d
+
+b) Include /usr/local/share/zabbix-jboss/etc/zabbix/zabbix_agentd.d/ into the configuration
+of your Zabbix agent. Typically it can be done by adding the following line
+into /etc/zabbix/zabbix_agentd.conf:
+
+    Include=/usr/local/share/zabbix-jboss/etc/zabbix/zabbix_agentd.d/
+
+3. Allow "unsafe parameters": it is required to pass '*' in the value of the argument
+of the user parameter used to discover JBoss managed objects. To do that specify
+in /etc/zabbix/zabbix_agentd.conf:
+
+    UnsafeUserParameters=1
+
+4. Copy /usr/local/share/zabbix-jboss/etc/zabbix/jboss/* into /etc/zabbix/jboss/
+(note: this directory is referenced in scripts and can't be chosen arbitrary)
+and disallow other users to peep at JMX credentials in the configuration files:
+
+    sudo mkdir -p /etc/zabbix/jboss
+    sudo cp /usr/local/share/zabbix-jboss/etc/zabbix/jboss/* /etc/zabbix/jboss/.
+    sudo chown root:zabbix /etc/zabbix/jboss/*
+    sudo chmod 640 /etc/zabbix/jboss/*
+
+5. Specify your JBoss AS home directory, JMX binding host/port and JMX user name
+in /etc/zabbix/jboss/zabbix-jboss-env.default.sh.
+
+6. Specify your JMX user name (the same as above) and the password in
+/etc/zabbix/jboss/zabbix-jboss-jmx.default.login.
+
+7. In case it hasn't been done earlier, specify the JMX user name/password
+in the JBoss AS configuration files jmx-console-users.properties and
+jmx-console-roles.properties located in <JBoss home>/server/<configuration>/conf/props
+(requires JBoss AS restart).
+
+8. Check whether all the above is installed in the right way:
+
+    sudo -u zabbix '/usr/local/share/zabbix-jboss/scripts/zabbix-jboss-jmx-discover.sh' 'jboss.web:type=Manager,*'
+
+In case of success the list of your web application contexts will be printed out
+in the JSON format.
+
+9. Restart Zabbix agent:
+
+    sudo service zabbix-agent restart
+
+10. Import the template file /usr/local/share/zabbix-jboss/templates/jboss-as6.xml
+into your Zabbix.
+
+11. Link the template "Template JMX JBoss AS 6" to your host (the host should have
+a JMX interface having been specified, port 1090).
+
+12. At the host level set values of following macros:
+
+    {$JMX_USERNAME} => the JMX user name
+    {$JMX_PASSWORD} => the JMX user password
+
+
+How to monitor multiple JBoss AS instances
+
+This module allows to monitor multiple JBoss AS instances at the same server.
+To do that:
+
+1. Copy zabbix-jboss-env.default.sh and zabbix-jboss-jmx.default.login
+into the same directory under the names zabbix-jboss-env.<instance>.sh
+and zabbix-jboss-jmx.<instance>.login correspondingly, where <instance>
+is an arbitrary chosen name of your JBoss AS instance, e.g. "myjboss2":
+
+    sudo cp /etc/zabbix/jboss/zabbix-jboss-env.default.sh    /etc/zabbix/jboss/zabbix-jboss-env.myjboss2.sh
+    sudo cp /etc/zabbix/jboss/zabbix-jboss-jmx.default.login /etc/zabbix/jboss/zabbix-jboss-jmx.myjboss2.login
+
+2. Specify your JBoss AS home directory, JMX binding host/port and JMX user name
+and password in the new files.
+
+3. When linking the template "Template JMX JBoss AS 6" to your host, in addition to
+{$JMX_USERNAME} and {$JMX_PASSWORD} specify the instance name chosen above
+as the value of {$JBOSS_INSTANCE} macro, e.g.:
+
+    {$JBOSS_INSTANCE} => myjboss2
+
+
+Security issues
+
+The JBoss AS command line utility twiddle.sh, which is used to discover managed
+objects, in JBoss AS 6 can accept JMX user name and password as the command line
+arguments only (this issue has been fixed in later versions of JBoss AS).
+So any local user can see the credentials in the running process list if he/she
+can display it at the moment, when the low-level discovery script is running.
+
+So, keep untrusted users out of your server to prevent them from catching
+the JMX credentials.
